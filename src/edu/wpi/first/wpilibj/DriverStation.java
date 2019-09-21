@@ -127,7 +127,16 @@ public class DriverStation {
     }
   }
 
-  private static DriverStation instance = new DriverStation(new File("driver_station.cmd"));
+  private static DriverStation instance;
+  static {
+	  String cmd_file_name = System.getenv().getOrDefault("ROBOT_EMU_CMD_FILE", "driver_station.cmd");
+	  File cmd_file = new File(cmd_file_name);
+	  if (!cmd_file.canRead()) {
+		  System.err.println("Error: cannot read: " + cmd_file);
+		  System.exit(1);
+	  }
+	  instance = new DriverStation(cmd_file);
+  }
 
   // Joystick User Data
   private HALJoystickAxes[] m_joystickAxes = new HALJoystickAxes[kJoystickPorts];
