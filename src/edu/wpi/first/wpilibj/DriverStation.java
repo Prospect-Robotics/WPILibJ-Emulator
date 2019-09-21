@@ -135,6 +135,7 @@ public class DriverStation {
 		  System.err.println("Error: cannot read: " + cmd_file);
 		  System.exit(1);
 	  }
+	  System.out.println("Robot Emulation starting.  Commands from: " + cmd_file);
 	  instance = new DriverStation(cmd_file);
   }
 
