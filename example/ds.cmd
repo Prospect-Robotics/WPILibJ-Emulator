@@ -5,7 +5,14 @@ joystick.config 1 3 14 1
 disable
 # autonomous: 0 -> Not Autonomous, non-zero -> Atonomous
 autonomous 0
-wait 2000000
+
+# All commands before first wait command are executed before robot
+# constructor runs.
+
+uwait 2000000 # uwait <micro-seconds> until taking next action.
 enable
-wait 10000000
+mwait 10000   # mwait <milli-seconds> until taking next action.
 disable
+
+mwait 1000
+powerdown

@@ -176,6 +176,7 @@ public class DriverStation {
   private boolean m_userInAutonomous;
   private boolean m_userInTeleop;
   private boolean m_userInTest;
+  private boolean m_powerdown;
 
   // Control word variables
   private final Object m_controlWordMutex;
@@ -207,14 +208,23 @@ public class DriverStation {
 	  }
   }
   
+  public boolean emulatorIsPowerdown()
+  {
+	  synchronized (m_controlWordMutex) {
+		  updateControlWord(false);
+		  return m_powerdown;
+	  }
+  }
+
   private void processOneCommand()
   {
 	  String cmd = null;
 	  try {
 		  cmd = cmdReader.readLine();
 		  if (null == cmd) {
-			  System.out.println("End of command file, running forever...");
+			  System.out.println("End of command file, powerdown...");
 			  fpgaTimeForNextCommand = Long.MAX_VALUE;
+			  m_powerdown = true;
 			  return;
 		  }
 		  cmd = cmd.strip();
@@ -256,9 +266,14 @@ public class DriverStation {
 		      m_joystickButtonsCache[instance].m_count = num_buttons;
 		      return;
 		  }
-		  if (cmd_components[0].equalsIgnoreCase("wait")) {
+		  if (cmd_components[0].equalsIgnoreCase("uwait")) {
 			  int delay = Integer.decode(cmd_components[1]);
 			  fpgaTimeForNextCommand += delay;
+			  return;
+		  }
+		  if (cmd_components[0].equalsIgnoreCase("mwait")) {
+			  int delay = Integer.decode(cmd_components[1]);
+			  fpgaTimeForNextCommand += delay * 1000;
 			  return;
 		  }
 		  if (cmd_components[0].equalsIgnoreCase("autonomous")) {
@@ -272,6 +287,10 @@ public class DriverStation {
 		  }
 		  if (cmd_components[0].equalsIgnoreCase("enable")) {
 			  m_robotEnabled = true;
+			  return;
+		  }
+		  if (cmd_components[0].equalsIgnoreCase("powerdown")) {
+			  m_powerdown = true;
 			  return;
 		  }
 		  System.err.println("Error: Unrecognized command: " + cmdReader.getLineNumber() + " <" + cmd + '>');

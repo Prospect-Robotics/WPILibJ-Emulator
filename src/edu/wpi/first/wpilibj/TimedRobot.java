@@ -58,7 +58,7 @@ public class TimedRobot extends IterativeRobotBase {
 	  long max_loop = Long.MIN_VALUE;
 	  long loop_sum = 0;
 	  long stat_cnt = 0;
-	  while (true) {
+	  while (!m_ds.emulatorIsPowerdown()) {
 		  long now = RobotController.getFPGATime();
 		  long wait_micros = expirationTime - now;
 		  if (wait_micros > 0) {
@@ -101,6 +101,8 @@ public class TimedRobot extends IterativeRobotBase {
 		  }
 		  iteration++;
 	  }
+	  // We are powering down.  Don't return as that would produce an error message, just successfully exit.
+	  System.exit(0);
   }
 
   /**
