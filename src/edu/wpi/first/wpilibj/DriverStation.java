@@ -69,19 +69,6 @@ public class DriverStation {
   private static final double JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL = 1.0;
   private double m_nextMessageTime;
 
-  private static class DriverStationTask implements Runnable {
-    private final DriverStation m_ds;
-
-    DriverStationTask(DriverStation ds) {
-      m_ds = ds;
-    }
-
-    @Override
-    public void run() {
-      m_ds.run();
-    }
-  } /* DriverStationTask */
-
   private static class MatchDataSender {
     @SuppressWarnings("MemberName")
     NetworkTable table;
@@ -145,10 +132,6 @@ public class DriverStation {
   private HALJoystickButtons[] m_joystickButtons = new HALJoystickButtons[kJoystickPorts];
   //private MatchInfoData m_matchInfo = new MatchInfoData();
 
-  // Joystick Cached Data
-  private HALJoystickAxes[] m_joystickAxesCache = new HALJoystickAxes[kJoystickPorts];
-  private HALJoystickPOVs[] m_joystickPOVsCache = new HALJoystickPOVs[kJoystickPorts];
-  private HALJoystickButtons[] m_joystickButtonsCache = new HALJoystickButtons[kJoystickPorts];
   //private MatchInfoData m_matchInfoCache = new MatchInfoData();
 
   // Joystick button rising/falling edge flags
@@ -162,7 +145,6 @@ public class DriverStation {
 
   // Internal Driver Station thread
   @SuppressWarnings("PMD.SingularField")
-  private final Thread m_thread;
   private volatile boolean m_threadKeepAlive = true;
 
   private final ReentrantLock m_cacheDataMutex = new ReentrantLock();
@@ -196,112 +178,129 @@ public class DriverStation {
 
   // Access to command state synchronized for safe access from different threads.
   private long fpgaTimeForNextCommand = 0;
+  private boolean m_runCommandProcessing;
   private boolean m_robotEnabled;
   private boolean m_robotAutonomous;
   
   private void processCurrentCommands()
   {
-	  synchronized (m_controlWordMutex) {
-		  long now = RobotController.getFPGATime();
-		  while (now > fpgaTimeForNextCommand)
-			  processOneCommand();
-	  }
+      synchronized (m_controlWordMutex) {
+	  if (!m_runCommandProcessing)
+	      return;
+	  long now = RobotController.getFPGATime();
+	  while (now > fpgaTimeForNextCommand)
+	      processOneCommand();
+      }
   }
-  
+
   public boolean emulatorIsPowerdown()
   {
-	  synchronized (m_controlWordMutex) {
-		  updateControlWord(false);
-		  return m_powerdown;
-	  }
+      synchronized (m_controlWordMutex) {
+	  updateControlWord(false);
+	  return m_powerdown;
+      }
+  }
+
+  public void emulatorStartCommandProcessing()
+  {
+      synchronized (m_controlWordMutex) {
+	  m_runCommandProcessing = true;
+	  // Normalize time to now.
+	  fpgaTimeForNextCommand += RobotController.getFPGATime();
+      }
   }
 
   private void processOneCommand()
   {
-	  String cmd = null;
-	  try {
-		  cmd = cmdReader.readLine();
-		  if (null == cmd) {
-			  System.out.println("End of command file, powerdown...");
-			  fpgaTimeForNextCommand = Long.MAX_VALUE;
-			  m_powerdown = true;
-			  return;
-		  }
-		  cmd = cmd.strip();
-		  System.out.println("Command " + cmdReader.getLineNumber() + ": '" + cmd + '\'');
-		  int comment_loc = cmd.indexOf('#');
-		  if (comment_loc >= 0) {
-			  cmd = cmd.substring(0, comment_loc);
-		  }
-		  if (cmd.length() == 0) {
-			  return;  // Whitespace only or comment, ignore
-		  }
-		  String cmd_components[] = commandSplitter.split(cmd);
-		  if (cmd_components[0].equalsIgnoreCase("joystick.config")) {
-			  int instance    = Integer.parseInt(cmd_components[1]);
-			  int num_axis    = Integer.parseInt(cmd_components[2]);
-			  byte num_buttons = (byte)Integer.parseInt(cmd_components[3]);
-			  int num_pov     = Integer.parseInt(cmd_components[4]);
-			  if (instance > kJoystickPorts) {
-				  System.err.println("Error: Instance number " + instance + " out of range.  Line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
-				  System.exit(1);
-			  }
-			  if (instance > kJoystickPorts || instance < 0 || num_axis < 0 || num_buttons < 0 || num_pov < 0) {
-				  System.err.println("Error: paramter out of range.  Line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
-				  System.exit(1);
-			  }
-		      m_joystickAxes[instance] = new HALJoystickAxes(num_axis);
-		      m_joystickAxes[instance].m_count = (short)num_axis;
-		      
-		      m_joystickPOVs[instance] = new HALJoystickPOVs(num_pov);
-		      m_joystickPOVs[instance].m_count = (short)num_pov;
-
-		      m_joystickButtons[instance].m_count = num_buttons;
-		      
-		      m_joystickAxesCache[instance] = new HALJoystickAxes(num_axis);
-		      m_joystickAxesCache[instance].m_count = (short)num_axis;
-		      
-		      m_joystickPOVsCache[instance] = new HALJoystickPOVs(num_pov);
-		      m_joystickPOVsCache[instance].m_count = (short)num_pov;
-		      m_joystickButtonsCache[instance].m_count = num_buttons;
-		      return;
-		  }
-		  if (cmd_components[0].equalsIgnoreCase("uwait")) {
-			  int delay = Integer.decode(cmd_components[1]);
-			  fpgaTimeForNextCommand += delay;
-			  return;
-		  }
-		  if (cmd_components[0].equalsIgnoreCase("mwait")) {
-			  int delay = Integer.decode(cmd_components[1]);
-			  fpgaTimeForNextCommand += delay * 1000;
-			  return;
-		  }
-		  if (cmd_components[0].equalsIgnoreCase("autonomous")) {
-			  int v = Integer.decode(cmd_components[1]);
-			  m_robotAutonomous = (v != 0);
-			  return;
-		  }
-		  if (cmd_components[0].equalsIgnoreCase("disable")) {
-			  m_robotEnabled = false;
-			  return;
-		  }
-		  if (cmd_components[0].equalsIgnoreCase("enable")) {
-			  m_robotEnabled = true;
-			  return;
-		  }
-		  if (cmd_components[0].equalsIgnoreCase("powerdown")) {
-			  m_powerdown = true;
-			  return;
-		  }
-		  System.err.println("Error: Unrecognized command: " + cmdReader.getLineNumber() + " <" + cmd + '>');
-	  } catch (IOException ioe) {
-		  ioe.printStackTrace();
-	  } catch (NumberFormatException nfe) {
-		  System.err.println("Error: Bad command line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+      String cmd = null;
+      try {
+	  cmd = cmdReader.readLine();
+	  if (null == cmd) {
+	      System.out.println("End of command file, powerdown...");
+	      fpgaTimeForNextCommand = Long.MAX_VALUE;
+	      m_powerdown = true;
+	      return;
 	  }
-	  System.exit(1);
+	  cmd = cmd.strip();
+	  System.out.println("Command " + cmdReader.getLineNumber() + ": '" + cmd + '\'');
+	  int comment_loc = cmd.indexOf('#');
+	  if (comment_loc >= 0) {
+	      cmd = cmd.substring(0, comment_loc);
+	  }
+	  if (cmd.length() == 0) {
+	      return;  // Whitespace only or comment, ignore
+	  }
+	  String cmd_components[] = commandSplitter.split(cmd);
+	  if (cmd_components[0].equalsIgnoreCase("joystick.config")) {
+	      int instance    = Integer.parseInt(cmd_components[1]);
+	      int num_axis    = Integer.parseInt(cmd_components[2]);
+	      byte num_buttons = (byte)Integer.parseInt(cmd_components[3]);
+	      int num_pov     = Integer.parseInt(cmd_components[4]);
+	      if (instance > kJoystickPorts) {
+		  System.err.println("Error: Instance number " + instance + " out of range.  Line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+		  System.exit(1);
+	      }
+	      if (instance > kJoystickPorts || instance < 0 || num_axis < 0 || num_buttons < 0 || num_pov < 0) {
+		  System.err.println("Error: paramter out of range.  Line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+		  System.exit(1);
+	      }
+	      m_joystickAxes[instance] = new HALJoystickAxes(num_axis);
+	      m_joystickAxes[instance].m_count = (short)num_axis;
+
+	      m_joystickPOVs[instance] = new HALJoystickPOVs(num_pov);
+	      m_joystickPOVs[instance].m_count = (short)num_pov;
+
+	      m_joystickButtons[instance].m_count = num_buttons;
+
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("joystick.axis")) {
+	      int instance    = Integer.parseInt(cmd_components[1]);
+	      int axis        = Integer.parseInt(cmd_components[2]);
+	      float pos       = Float.parseFloat(cmd_components[3]);
+	      if (instance > kJoystickPorts || instance < 0 || axis < 0 || axis >= m_joystickAxes[instance].m_count) {
+		  System.err.println("Error: paramter out of range.  Line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+		  System.exit(1);
+	      }
+	      m_joystickAxes[instance].m_axes[axis] = pos;
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("uwait")) {
+	      int delay = Integer.decode(cmd_components[1]);
+	      fpgaTimeForNextCommand += delay;
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("mwait")) {
+	      int delay = Integer.decode(cmd_components[1]);
+	      fpgaTimeForNextCommand += delay * 1000;
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("autonomous")) {
+	      int v = Integer.decode(cmd_components[1]);
+	      m_robotAutonomous = (v != 0);
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("disable")) {
+	      m_robotEnabled = false;
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("enable")) {
+	      m_robotEnabled = true;
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("powerdown")) {
+	      m_powerdown = true;
+	      return;
+	  }
+	  System.err.println("Error: Unrecognized command: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+      } catch (IOException ioe) {
+	  ioe.printStackTrace();
+      } catch (NumberFormatException nfe) {
+	  System.err.println("Error: Bad command line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+      }
+      System.exit(1);
   }
-  
+
   /**
    * DriverStation constructor.
    *
@@ -310,44 +309,34 @@ public class DriverStation {
    */
   @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
   private DriverStation(File cmdFile) {
-	  commandSplitter = Pattern.compile("\\s+"); // Split command components on whitespace
-	  try {
-		  cmdReader = new LineNumberReader(new FileReader(cmdFile));
-	  } catch (IOException ioe) {
-		  System.err.println("Error: Couldn't open: " + cmdFile);
-		  ioe.printStackTrace();
-		  System.exit(1);
-	  }
-	  //HAL.initialize(500, 0);
-	  m_waitForDataCount = 0;
-	  m_waitForDataMutex = new ReentrantLock();
-	  m_waitForDataCond = m_waitForDataMutex.newCondition();
+      commandSplitter = Pattern.compile("\\s+"); // Split command components on whitespace
+      try {
+	  cmdReader = new LineNumberReader(new FileReader(cmdFile));
+      } catch (IOException ioe) {
+	  System.err.println("Error: Couldn't open: " + cmdFile);
+	  ioe.printStackTrace();
+	  System.exit(1);
+      }
+      //HAL.initialize(500, 0);
+      m_waitForDataCount = 0;
+      m_waitForDataMutex = new ReentrantLock();
+      m_waitForDataCond = m_waitForDataMutex.newCondition();
 
-	  for (int i = 0; i < kJoystickPorts; i++) {
-		  m_joystickButtons[i] = new HALJoystickButtons();
-		  m_joystickAxes[i] = new HALJoystickAxes(0/*HAL.kMaxJoystickAxes*/);
-		  m_joystickPOVs[i] = new HALJoystickPOVs(0/*HAL.kMaxJoystickPOVs*/);
+      for (int i = 0; i < kJoystickPorts; i++) {
+	  m_joystickButtons[i] = new HALJoystickButtons();
+	  m_joystickAxes[i] = new HALJoystickAxes(0/*HAL.kMaxJoystickAxes*/);
+	  m_joystickPOVs[i] = new HALJoystickPOVs(0/*HAL.kMaxJoystickPOVs*/);
 
-		  m_joystickButtonsCache[i] = new HALJoystickButtons();
-		  m_joystickAxesCache[i] = new HALJoystickAxes(0/*HAL.kMaxJoystickAxes*/);
-		  m_joystickPOVsCache[i] = new HALJoystickPOVs(0/*HAL.kMaxJoystickPOVs*/);
-	  }
-	  // Read commands until first "wait"
-	  while (fpgaTimeForNextCommand == 0) {
-		  processOneCommand();
-	  }
-	  // Normalize time to now.
-	  fpgaTimeForNextCommand += RobotController.getFPGATime();
-	  m_controlWordMutex = new Object();
-	  //m_controlWordCache = new ControlWord();
-	  m_lastControlWordUpdate = 0;
+      }
+      // Read commands until first "wait"
+      while (fpgaTimeForNextCommand == 0) {
+	  processOneCommand();
+      }
+      m_controlWordMutex = new Object();
+      //m_controlWordCache = new ControlWord();
+      m_lastControlWordUpdate = 0;
 
-	  m_matchDataSender = new MatchDataSender();
-
-	  m_thread = new Thread(new DriverStationTask(this), "FRCDriverStation");
-	  m_thread.setPriority((Thread.NORM_PRIORITY + Thread.MAX_PRIORITY) / 2);
-
-	  m_thread.start();
+      m_matchDataSender = new MatchDataSender();
   }
 
   /**
@@ -1167,67 +1156,6 @@ public class DriverStation {
   }
 
   /**
-   * Copy data from the DS task for the user. If no new data exists, it will just be returned,
-   * otherwise the data will be copied from the DS polling loop.
-   */
-  protected void getData() {
-    // Get the status of all of the joysticks
-//    for (byte stick = 0; stick < kJoystickPorts; stick++) {
-//      m_joystickAxesCache[stick].m_count =
-//          HAL.getJoystickAxes(stick, m_joystickAxesCache[stick].m_axes);
-//      m_joystickPOVsCache[stick].m_count =
-//          HAL.getJoystickPOVs(stick, m_joystickPOVsCache[stick].m_povs);
-//      m_joystickButtonsCache[stick].m_buttons = HAL.getJoystickButtons(stick, m_buttonCountBuffer);
-//      m_joystickButtonsCache[stick].m_count = m_buttonCountBuffer.get(0);
-//    }
-
-    //HAL.getMatchInfo(m_matchInfoCache);
-
-    // Force a control word update, to make sure the data is the newest.
-    updateControlWord(true);
-
-    // lock joystick mutex to swap cache data
-    m_cacheDataMutex.lock();
-    try {
-      for (int i = 0; i < kJoystickPorts; i++) {
-        // If buttons weren't pressed and are now, set flags in m_buttonsPressed
-        m_joystickButtonsPressed[i] |=
-            ~m_joystickButtons[i].m_buttons & m_joystickButtonsCache[i].m_buttons;
-
-        // If buttons were pressed and aren't now, set flags in m_buttonsReleased
-        m_joystickButtonsReleased[i] |=
-            m_joystickButtons[i].m_buttons & ~m_joystickButtonsCache[i].m_buttons;
-      }
-
-      // move cache to actual data
-      HALJoystickAxes[] currentAxes = m_joystickAxes;
-      m_joystickAxes = m_joystickAxesCache;
-      m_joystickAxesCache = currentAxes;
-
-      HALJoystickButtons[] currentButtons = m_joystickButtons;
-      m_joystickButtons = m_joystickButtonsCache;
-      m_joystickButtonsCache = currentButtons;
-
-      HALJoystickPOVs[] currentPOVs = m_joystickPOVs;
-      m_joystickPOVs = m_joystickPOVsCache;
-      m_joystickPOVsCache = currentPOVs;
-
-//      MatchInfoData currentInfo = m_matchInfo;
-//      m_matchInfo = m_matchInfoCache;
-//      m_matchInfoCache = currentInfo;
-    } finally {
-      m_cacheDataMutex.unlock();
-    }
-
-    m_waitForDataMutex.lock();
-    m_waitForDataCount++;
-    m_waitForDataCond.signalAll();
-    m_waitForDataMutex.unlock();
-
-    sendMatchData();
-  }
-
-  /**
    * Reports errors related to unplugged joysticks Throttles the errors so that they don't overwhelm
    * the DS.
    */
@@ -1248,45 +1176,6 @@ public class DriverStation {
     if (currentTime > m_nextMessageTime) {
       reportWarning(message, false);
       m_nextMessageTime = currentTime + JOYSTICK_UNPLUGGED_MESSAGE_INTERVAL;
-    }
-  }
-
-  /**
-   * Provides the service routine for the DS polling m_thread.
-   */
-  private void run() {
-    int safetyCounter = 0;
-    while (m_threadKeepAlive) {
-      //HAL.waitForDSData();
-    	try {
-			Thread.sleep(10_000);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-			break;
-		}
-      getData();
-
-      if (isDisabled()) {
-        safetyCounter = 0;
-      }
-
-      safetyCounter++;
-      if (safetyCounter >= 4) {
-        MotorSafety.checkMotors();
-        safetyCounter = 0;
-      }
-      if (m_userInDisabled) {
-        //HAL.observeUserProgramDisabled();
-      }
-      if (m_userInAutonomous) {
-        //HAL.observeUserProgramAutonomous();
-      }
-      if (m_userInTeleop) {
-        //HAL.observeUserProgramTeleop();
-      }
-      if (m_userInTest) {
-        //HAL.observeUserProgramTest();
-      }
     }
   }
 

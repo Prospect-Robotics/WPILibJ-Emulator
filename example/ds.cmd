@@ -11,6 +11,10 @@ autonomous 0
 
 uwait 2000000 # uwait <micro-seconds> until taking next action.
 enable
+
+mwait 4000
+joystick.axis 1 1 0.5
+
 mwait 10000   # mwait <milli-seconds> until taking next action.
 disable
 

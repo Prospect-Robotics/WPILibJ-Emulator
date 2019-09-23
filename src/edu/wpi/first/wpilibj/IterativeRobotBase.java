@@ -7,6 +7,10 @@
 
 package edu.wpi.first.wpilibj;
 
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+
 //import edu.wpi.first.wpilibj.livewindow.LiveWindow;
 import edu.wpi.first.wpilibj.shuffleboard.Shuffleboard;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -56,14 +60,47 @@ public abstract class IterativeRobotBase extends RobotBase {
   private Mode m_lastMode = Mode.kNone;
   private final Watchdog m_watchdog;
 
+  private PrintWriter m_logWriter;
+  private long m_lastLogTime;
+
+  private void doLog(String msg)
+  {
+      if (m_logWriter != null) {
+	  synchronized (m_logWriter) {
+	      long now = RobotController.getFPGATime();
+
+	      m_logWriter.printf("%8d: %s\n", now - m_lastLogTime, msg);
+	      m_lastLogTime = now;
+	  }
+      }
+  }
   /**
    * Constructor for IterativeRobotBase.
    *
    * @param period Period in seconds.
    */
   protected IterativeRobotBase(double period) {
-    m_period = period;
-    m_watchdog = new Watchdog(period, this::printLoopOverrunMessage);
+      m_period = period;
+      m_watchdog = new Watchdog(period, this::printLoopOverrunMessage);
+
+      String log_file_name = System.getenv().get("ROBOT_LOOP_LOG");
+      if (log_file_name != null) {
+	  try {
+	      m_logWriter = new PrintWriter(new FileWriter(log_file_name));
+	  } catch (IOException ioe) {
+	      ioe.printStackTrace();
+	      System.exit(1);
+	  }
+	  Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+	      try {
+		  m_logWriter.flush();
+		  m_logWriter.close();
+	      } catch (Exception ex) {
+		  // Ignore.
+	      }
+	  }));
+      }
+
   }
 
   /**
@@ -193,7 +230,8 @@ public abstract class IterativeRobotBase extends RobotBase {
     }
   }
 
-  protected void loopFunc() {
+    protected void loopFunc() {
+    doLog("top-loopFunc");
     m_watchdog.reset();
 
     // Call the appropriate function depending upon the current robot mode
@@ -203,13 +241,17 @@ public abstract class IterativeRobotBase extends RobotBase {
       if (m_lastMode != Mode.kDisabled) {
         //LiveWindow.setEnabled(false);
         Shuffleboard.disableActuatorWidgets();
+        doLog("pre-disabledInit");
         disabledInit();
+        doLog("post-disabledInit");
         m_watchdog.addEpoch("disabledInit()");
         m_lastMode = Mode.kDisabled;
       }
 
       //HAL.observeUserProgramDisabled();
+      doLog("pre-disabledPeriodic");
       disabledPeriodic();
+      doLog("post-disabledPeriodic");
       m_watchdog.addEpoch("disablePeriodic()");
     } else if (isAutonomous()) {
       // Call AutonomousInit() if we are now just entering autonomous mode from either a different
@@ -217,13 +259,17 @@ public abstract class IterativeRobotBase extends RobotBase {
       if (m_lastMode != Mode.kAutonomous) {
         //LiveWindow.setEnabled(false);
         Shuffleboard.disableActuatorWidgets();
+        doLog("pre-autonomousInit");
         autonomousInit();
+        doLog("post-autonomousInit");
         m_watchdog.addEpoch("autonomousInit()");
         m_lastMode = Mode.kAutonomous;
       }
 
       //HAL.observeUserProgramAutonomous();
+      doLog("pre-autonomousPeriodic");
       autonomousPeriodic();
+      doLog("post-autonomousPeriodic");
       m_watchdog.addEpoch("autonomousPeriodic()");
     } else if (isOperatorControl()) {
       // Call TeleopInit() if we are now just entering teleop mode from either a different mode or
@@ -231,13 +277,17 @@ public abstract class IterativeRobotBase extends RobotBase {
       if (m_lastMode != Mode.kTeleop) {
         //LiveWindow.setEnabled(false);
         Shuffleboard.disableActuatorWidgets();
+        doLog("pre-teleopInit");
         teleopInit();
+        doLog("post-teleopInit");
         m_watchdog.addEpoch("teleopInit()");
         m_lastMode = Mode.kTeleop;
       }
 
       //HAL.observeUserProgramTeleop();
+      doLog("pre-teleopPeriodic");
       teleopPeriodic();
+      doLog("post-teleopPeriodic");
       m_watchdog.addEpoch("teleopPeriodic()");
     } else {
       // Call TestInit() if we are now just entering test mode from either a different mode or from
@@ -245,17 +295,23 @@ public abstract class IterativeRobotBase extends RobotBase {
       if (m_lastMode != Mode.kTest) {
         //LiveWindow.setEnabled(true);
         Shuffleboard.enableActuatorWidgets();
+        doLog("pre-testInit");
         testInit();
+        doLog("post-testInit");
         m_watchdog.addEpoch("testInit()");
         m_lastMode = Mode.kTest;
       }
 
       //HAL.observeUserProgramTest();
+      doLog("pre-testPeriodic");
       testPeriodic();
+      doLog("post-testPeriodic");
       m_watchdog.addEpoch("testPeriodic()");
     }
 
+    doLog("pre-robotPeriodic");
     robotPeriodic();
+    doLog("post-robotPeriodic");
     m_watchdog.addEpoch("robotPeriodic()");
     m_watchdog.disable();
     SmartDashboard.updateValues();
@@ -267,6 +323,7 @@ public abstract class IterativeRobotBase extends RobotBase {
     if (m_watchdog.isExpired()) {
       m_watchdog.printEpochs();
     }
+    doLog("bottom-loopFunc");
   }
 
   private void printLoopOverrunMessage() {

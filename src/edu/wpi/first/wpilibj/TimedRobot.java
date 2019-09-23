@@ -44,6 +44,7 @@ public class TimedRobot extends IterativeRobotBase {
   @Override
   @SuppressWarnings("UnsafeFinalization")
   public void startCompetition() {
+	  m_ds.emulatorStartCommandProcessing();
 	  long iteration = 0;
 	  long period_micros = (long)(m_period * 1e6);
 	  robotInit();
