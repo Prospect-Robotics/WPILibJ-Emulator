@@ -42,7 +42,7 @@ public class PowerDistributionPanel extends SendableBase  {
    * @return The voltage of the PDP in volts
    */
   public double getVoltage() {
-    return 12; //PDPJNI.getPDPVoltage(m_handle);
+    return 12.5; //PDPJNI.getPDPVoltage(m_handle);
   }
 
   /**
