@@ -8,6 +8,7 @@
 package edu.wpi.first.wpilibj;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 
@@ -16,12 +17,13 @@ public class Notifier implements AutoCloseable {
   private Thread m_thread;
   // The lock for the process information.
   private final ReentrantLock m_processLock = new ReentrantLock();
+  private final Condition m_condition = m_processLock.newCondition();
   // The C pointer to the notifier object. We don't use it directly, it is
   // just passed to the JNI bindings.
   private final AtomicInteger m_notifier = new AtomicInteger();
   // The time, in microseconds, at which the corresponding handler should be
   // called. Has the same zero as Utility.getFPGATime().
-  private double m_expirationTime;
+  private long m_expirationTime;
   // The handler passed in by the user which should be called at the
   // appropriate interval.
   private Runnable m_handler;
@@ -32,7 +34,6 @@ public class Notifier implements AutoCloseable {
   private double m_period;
 
   @Override
-  @SuppressWarnings("NoFinalizer")
   protected void finalize() {
     close();
   }
@@ -67,6 +68,9 @@ public class Notifier implements AutoCloseable {
     if (notifier == 0) {
       return;
     }
+    m_processLock.lock();
+    m_condition.signal();
+    m_processLock.unlock();
     //NotifierJNI.updateNotifierAlarm(notifier, triggerTime);
   }
 
@@ -74,7 +78,7 @@ public class Notifier implements AutoCloseable {
    * Update the alarm hardware to reflect the next alarm.
    */
   private void updateAlarm() {
-    updateAlarm((long) (m_expirationTime * 1e6));
+    updateAlarm(m_expirationTime);
   }
 
   /**
@@ -84,53 +88,66 @@ public class Notifier implements AutoCloseable {
    *            using StartSingle or StartPeriodic.
    */
   public Notifier(Runnable run) {
-    m_handler = run;
-    m_notifier.set(0 /*NotifierJNI.initializeNotifier()*/);
+      m_handler = run;
+      m_notifier.set(1 /*NotifierJNI.initializeNotifier()*/);
 
-    m_thread = new Thread(() -> {
-      while (!Thread.interrupted()) {
-        int notifier = m_notifier.get();
-        if (notifier == 0) {
-          break;
-        }
-        long curTime = 0; //NotifierJNI.waitForNotifierAlarm(notifier);
-        if (curTime == 0) {
-          break;
-        }
+      m_thread = new Thread(() -> {
+outer:	  while (!Thread.interrupted()) {
+	      int notifier = m_notifier.get();
+	      if (notifier == 0) {
+		  break;
+	      }
 
-        Runnable handler = null;
-        m_processLock.lock();
-        try {
-          handler = m_handler;
-          if (m_periodic) {
-            m_expirationTime += m_period;
-            updateAlarm();
-          } else {
-            // need to update the alarm to cause it to wait again
-            updateAlarm((long) -1);
-          }
-        } finally {
-          m_processLock.unlock();
-        }
+	      Runnable handler = null;
+	      m_processLock.lock();
+	      try {
+		  long now = RobotController.getFPGATime();
+		  long wait_micros = m_expirationTime - now;
+		  if (wait_micros > Long.MAX_VALUE/1000)
+		      throw new InternalError();
+		  long wait_nanos = 1000 * wait_micros;
+		  while (wait_nanos > 0) {
+		      m_condition.awaitNanos(wait_nanos);
+		      if (Thread.interrupted())
+			  break outer;
+		      now = RobotController.getFPGATime();
+		      wait_micros = m_expirationTime - now;
+			  if (wait_micros > Long.MAX_VALUE/1000)
+			      throw new InternalError();
+		      wait_nanos = 1000 * wait_micros;
+		  }
+		  handler = m_handler;
+		  if (m_periodic) {
+		      m_expirationTime += m_period;
+		      updateAlarm();
+		  } else {
+		      // need to update the alarm to cause it to wait again
+		      updateAlarm(Long.MAX_VALUE / 1000);
+		  }
+	      } catch (InterruptedException ie) {
+		  break;
+	      } finally {
+		  m_processLock.unlock();
+	      }
 
-        if (handler != null) {
-          handler.run();
-        }
-      }
-    });
-    m_thread.setName("Notifier");
-    m_thread.setDaemon(true);
-    m_thread.setUncaughtExceptionHandler((thread, error) -> {
-      Throwable cause = error.getCause();
-      if (cause != null) {
-        error = cause;
-      }
-      DriverStation.reportError("Unhandled exception: " + error.toString(), error.getStackTrace());
-      DriverStation.reportError(
-          "The loopFunc() method (or methods called by it) should have handled "
-              + "the exception above.", false);
-    });
-    m_thread.start();
+	      if (handler != null) {
+		  handler.run();
+	      }
+	  }
+      });
+      m_thread.setName("Notifier");
+      m_thread.setDaemon(true);
+      m_thread.setUncaughtExceptionHandler((thread, error) -> {
+	  Throwable cause = error.getCause();
+	  if (cause != null) {
+	      error = cause;
+	  }
+	  DriverStation.reportError("Unhandled exception: " + error.toString(), error.getStackTrace());
+	  DriverStation.reportError(
+		  "The loopFunc() method (or methods called by it) should have handled "
+			  + "the exception above.", false);
+      });
+      m_thread.start();
   }
 
   /**
@@ -158,7 +175,7 @@ public class Notifier implements AutoCloseable {
     try {
       m_periodic = false;
       m_period = delay;
-      m_expirationTime = RobotController.getFPGATime() * 1e-6 + delay;
+      m_expirationTime = RobotController.getFPGATime() + (long)(1e6 * delay);
       updateAlarm();
     } finally {
       m_processLock.unlock();
@@ -178,7 +195,7 @@ public class Notifier implements AutoCloseable {
     try {
       m_periodic = true;
       m_period = period;
-      m_expirationTime = RobotController.getFPGATime() * 1e-6 + period;
+      m_expirationTime = RobotController.getFPGATime() + (long)(1e6 * period);
       updateAlarm();
     } finally {
       m_processLock.unlock();
