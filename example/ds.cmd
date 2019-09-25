@@ -9,13 +9,21 @@ autonomous 0
 # All commands before first wait command are executed before robot
 # constructor runs.
 
-uwait 2000000 # uwait <micro-seconds> until taking next action.
+uwait 1000000 # uwait <micro-seconds> until taking next action.
 enable
 
-mwait 4000
+mwait 2000    # mwait <milli-seconds> until taking next action.
 joystick.axis 1 1 0.5
 
-mwait 10000   # mwait <milli-seconds> until taking next action.
+mwait 2000
+joystick.axis 1 1 0
+
+mwait 1000
+joystick.button 1 4 press  # Front Pistons button.
+mwait 500
+joystick.button 1 4 release
+
+mwait 10000
 disable
 
 mwait 1000

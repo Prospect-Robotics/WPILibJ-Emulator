@@ -20,7 +20,6 @@ import java.util.regex.Pattern;
 
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
-import edu.wpi.first.networktables.NetworkTableInstance;
 
 /**
  * Provide access to the network communication data to / from the Driver Station.
@@ -263,6 +262,59 @@ public class DriverStation {
 		  System.exit(1);
 	      }
 	      m_joystickAxes[instance].m_axes[axis] = pos;
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("joystick.button")) {
+	      int instance    = Integer.parseInt(cmd_components[1]);
+	      int button      = Integer.parseInt(cmd_components[2]);
+	      boolean pressed = false;
+	      if (cmd_components[3].equalsIgnoreCase("press")) {
+		  pressed = true;
+	      } else if (cmd_components[3].equalsIgnoreCase("release")) {
+		  pressed = false;
+	      } else {
+		  System.err.println("Error: Unknown state (not \"press\" or \"release|').  Line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+		  System.exit(1);
+	      }
+	      if (instance > kJoystickPorts || instance < 0 || button <= 0 || button >= m_joystickButtons[instance].m_count) {
+		  System.err.println("Error: paramter out of range.  Line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+		  System.exit(1);
+	      }
+	      int button_mask = 1 << (button - 1);
+	      if (pressed) {
+		  m_joystickButtons[instance].m_buttons |= button_mask;
+		  m_joystickButtonsPressed[instance] |= button_mask;
+	      } else {
+		  m_joystickButtons[instance].m_buttons &= ~button_mask;
+		  m_joystickButtonsReleased[instance] |= button_mask;
+	      }
+	      return;
+	  }
+	  if (cmd_components[0].equalsIgnoreCase("joystick.pov")) {
+	      int instance    = Integer.parseInt(cmd_components[1]);
+	      int pov         = Integer.parseInt(cmd_components[2]);
+	      int value       = Integer.parseInt(cmd_components[3]);
+	      boolean pov_out_of_range = true;
+	      switch (value) {
+	      case -1:
+	      case 0:
+	      case 45:
+	      case 90:
+	      case 135:
+	      case 180:
+	      case 225:
+	      case 270:
+	      case 315:
+		  pov_out_of_range = false;
+		  break;
+	      default:
+		  break;
+	      }
+	      if (instance > kJoystickPorts || instance < 0 || pov < 0 || pov >= m_joystickPOVs[instance].m_count || pov_out_of_range) {
+		  System.err.println("Error: paramter out of range.  Line: " + cmdReader.getLineNumber() + " <" + cmd + '>');
+		  System.exit(1);
+	      }
+	      m_joystickPOVs[instance].m_povs[pov] = (short)value;
 	      return;
 	  }
 	  if (cmd_components[0].equalsIgnoreCase("uwait")) {
