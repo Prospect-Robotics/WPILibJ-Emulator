@@ -434,7 +434,7 @@ public class SPI implements AutoCloseable {
   private static class Accumulator implements AutoCloseable {
     Accumulator(int port, int xferSize, int validMask, int validValue, int dataShift,
                 int dataSize, boolean isSigned, boolean bigEndian) {
-      m_notifier = new Notifier(this::update);
+      //m_notifier = new Notifier(this::update);
       m_buf = ByteBuffer.allocateDirect((xferSize + 1) * kAccumulateDepth * 4)
           .order(ByteOrder.nativeOrder());
       m_intBuf = m_buf.asIntBuffer();
@@ -451,10 +451,10 @@ public class SPI implements AutoCloseable {
 
     @Override
     public void close() {
-      m_notifier.close();
+      //m_notifier.close();
     }
 
-    final Notifier m_notifier;
+    //final Notifier m_notifier;
     final ByteBuffer m_buf;
     final IntBuffer m_intBuf;
     final Object m_mutex = new Object();
@@ -600,7 +600,7 @@ public class SPI implements AutoCloseable {
 
     m_accum = new Accumulator(m_port, xferSize, validMask, validValue, dataShift, dataSize,
                               isSigned, bigEndian);
-    m_accum.m_notifier.startPeriodic(period * 1024);
+    //m_accum.m_notifier.startPeriodic(period * 1024);
   }
 
   /**
