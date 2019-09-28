@@ -7,6 +7,9 @@
 
 package edu.wpi.first.wpilibj;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import edu.wpi.first.wpilibj.smartdashboard.SendableBuilder;
 
 /**
@@ -17,7 +20,6 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableBuilder;
  */
 public class Solenoid extends SolenoidBase {
   private final int m_channel; // The channel to control.
-  private int m_solenoidHandle;
 
   /**
    * Constructor using the default PCM ID (defaults to 0).
@@ -41,18 +43,19 @@ public class Solenoid extends SolenoidBase {
     SensorUtil.checkSolenoidModule(m_moduleNumber);
     SensorUtil.checkSolenoidChannel(m_channel);
 
-    int portHandle = 0;//HAL.getPortWithModule((byte) m_moduleNumber, (byte) m_channel);
-    m_solenoidHandle = 0; //SolenoidJNI.initializeSolenoidPort(portHandle);
 
     //HAL.report(tResourceType.kResourceType_Solenoid, m_channel, m_moduleNumber);
     setName("Solenoid", m_moduleNumber, m_channel);
+    RobotEmulator.getInstance().manage(this);
+  }
+  private List<SolenoidObserver> observers = new ArrayList<SolenoidObserver>();
+  void addObserver(SolenoidObserver o) {
+      observers.add(o);
   }
 
   @Override
   public void close() {
     super.close();
-    //SolenoidJNI.freeSolenoidPort(m_solenoidHandle);
-    m_solenoidHandle = 0;
   }
 
   /**
@@ -62,6 +65,9 @@ public class Solenoid extends SolenoidBase {
    */
   public void set(boolean on) {
     //SolenoidJNI.setSolenoid(m_solenoidHandle, on);
+      for (SolenoidObserver o : observers) {
+	  o.didSet(this, on);
+      }
   }
 
   /**

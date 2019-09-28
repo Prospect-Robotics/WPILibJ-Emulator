@@ -214,6 +214,7 @@ public class DriverStation {
       String cmd = null;
       try {
 	  cmd = cmdReader.readLine();
+	  RobotEmulator.getInstance().logCommand(cmd);
 	  if (null == cmd) {
 	      System.out.println("End of command file, powerdown...");
 	      fpgaTimeForNextCommand = Long.MAX_VALUE;
