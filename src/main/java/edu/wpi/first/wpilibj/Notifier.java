@@ -29,9 +29,9 @@ public class Notifier implements AutoCloseable {
   private Runnable m_handler;
   // Whether we are calling the handler just once or periodically.
   private boolean m_periodic;
-  // If periodic, the period of the calling; if just once, stores how long it
+  // If periodic, the period of the calling uS; if just once, stores how long it
   // is until we call the handler.
-  private double m_period;
+  private long m_period = 10_000_000;
 
   @Override
   protected void finalize() {
@@ -63,7 +63,7 @@ public class Notifier implements AutoCloseable {
    *
    * @param triggerTime the time at which the next alarm will be triggered
    */
-  private void updateAlarm(long triggerTime) {
+  private void updateAlarm() {
     int notifier = m_notifier.get();
     if (notifier == 0) {
       return;
@@ -74,13 +74,8 @@ public class Notifier implements AutoCloseable {
     //NotifierJNI.updateNotifierAlarm(notifier, triggerTime);
   }
 
-  /**
-   * Update the alarm hardware to reflect the next alarm.
-   */
-  private void updateAlarm() {
-    updateAlarm(m_expirationTime);
-  }
-
+  private static int instanceNum;
+  private static Object instanceNumLock = new Object();
   /**
    * Create a Notifier for timer event notification.
    *
@@ -119,10 +114,9 @@ outer:	  while (!Thread.interrupted()) {
 		  handler = m_handler;
 		  if (m_periodic) {
 		      m_expirationTime += m_period;
-		      updateAlarm();
 		  } else {
 		      // need to update the alarm to cause it to wait again
-		      updateAlarm(Long.MAX_VALUE / 1000);
+		      m_expirationTime = Long.MAX_VALUE / 1000;
 		  }
 	      } catch (InterruptedException ie) {
 		  break;
@@ -131,11 +125,19 @@ outer:	  while (!Thread.interrupted()) {
 	      }
 
 	      if (handler != null) {
+		  RobotEmulator re = RobotEmulator.getInstance();
+		  re.logNotifier("handler-enter");
 		  handler.run();
+		  re.logNotifier("handler-exit");
 	      }
 	  }
       });
-      m_thread.setName("Notifier");
+      String thread_name;
+      synchronized(instanceNumLock) {
+	  thread_name = "Notifier-" + instanceNum;
+	  instanceNum++;
+      }
+      m_thread.setName(thread_name);
       m_thread.setDaemon(true);
       m_thread.setUncaughtExceptionHandler((thread, error) -> {
 	  Throwable cause = error.getCause();
@@ -174,8 +176,8 @@ outer:	  while (!Thread.interrupted()) {
     m_processLock.lock();
     try {
       m_periodic = false;
-      m_period = delay;
-      m_expirationTime = RobotController.getFPGATime() + (long)(1e6 * delay);
+      m_period = (long)(1e6 * delay);
+      m_expirationTime = RobotController.getFPGATime() + m_period;
       updateAlarm();
     } finally {
       m_processLock.unlock();
@@ -194,8 +196,8 @@ outer:	  while (!Thread.interrupted()) {
     m_processLock.lock();
     try {
       m_periodic = true;
-      m_period = period;
-      m_expirationTime = RobotController.getFPGATime() + (long)(1e6 * period);
+      m_period = (long)(1e6 * period);
+      m_expirationTime = RobotController.getFPGATime() + m_period;
       updateAlarm();
     } finally {
       m_processLock.unlock();
