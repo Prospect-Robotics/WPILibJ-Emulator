@@ -48,8 +48,8 @@ public class Solenoid extends SolenoidBase {
     setName("Solenoid", m_moduleNumber, m_channel);
     RobotEmulator.getInstance().manage(this);
   }
-  private List<SolenoidObserver> observers = new ArrayList<SolenoidObserver>();
-  void addObserver(SolenoidObserver o) {
+  private List<RobotSolenoidObserver> observers = new ArrayList<RobotSolenoidObserver>();
+  void addObserver(RobotSolenoidObserver o) {
       observers.add(o);
   }
 
@@ -65,7 +65,7 @@ public class Solenoid extends SolenoidBase {
    */
   public void set(boolean on) {
     //SolenoidJNI.setSolenoid(m_solenoidHandle, on);
-      for (SolenoidObserver o : observers) {
+      for (RobotSolenoidObserver o : observers) {
 	  o.didSet(this, on);
       }
   }

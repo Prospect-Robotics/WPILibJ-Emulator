@@ -19,11 +19,19 @@ import com.ctre.phoenix.motorcontrol.StatusFrame;
 import com.ctre.phoenix.motorcontrol.StatusFrameEnhanced;
 import com.ctre.phoenix.motorcontrol.StickyFaults;
 import com.ctre.phoenix.motorcontrol.VelocityMeasPeriod;
+
+import edu.wpi.first.wpilibj.RobotEmulator;
+import edu.wpi.first.wpilibj.RobotMotorObserver;
+
 import com.ctre.phoenix.ParamEnum;
 import com.ctre.phoenix.motion.BufferedTrajectoryPointStream;
 import com.ctre.phoenix.motion.MotionProfileStatus;
 import com.ctre.phoenix.motion.SetValueMotionProfile;
 import com.ctre.phoenix.motion.TrajectoryPoint;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import com.ctre.phoenix.ErrorCode;
 import com.ctre.phoenix.ErrorCollection;
 import com.ctre.phoenix.ParamEnum;
@@ -55,6 +63,7 @@ public abstract class BaseMotorController implements com.ctre.phoenix.motorcontr
 	public BaseMotorController(int arbId) {
 		m_handle = 0;
 		_arbId = arbId;
+		RobotEmulator.getInstance().manage(this);
 	}
 
 	/**
@@ -166,6 +175,10 @@ public abstract class BaseMotorController implements com.ctre.phoenix.motorcontr
 		m_sendMode = mode;
 		int work;
 
+		for(RobotMotorObserver rmo : observers) {
+		    rmo.didSet(this, mode, demand0, demand1Type, demand1);
+		}
+		
 		switch (m_controlMode) {
 		case PercentOutput:
 			// case TimedPercentOutput:
@@ -3377,6 +3390,11 @@ public abstract class BaseMotorController implements com.ctre.phoenix.motorcontr
         allConfigs.pulseWidthPeriod_FilterWindowSz = (int) configGetParameter(ParamEnum.ePulseWidthPeriod_FilterWindowSz, 0, timeoutMs);
     
     
+    }
+
+    private List<RobotMotorObserver> observers = new ArrayList<RobotMotorObserver>();
+    public void addObserver(RobotMotorObserver o) {
+        observers.add(o);
     }
 
 }
