@@ -13,7 +13,7 @@ uwait 1000000 # uwait <micro-seconds> until taking next action.
 enable
 
 mwait 2000    # mwait <milli-seconds> until taking next action.
-joystick.axis 1 1 0.5
+joystick.axis 1 1 -25.0
 
 mwait 2000
 joystick.axis 1 1 0
@@ -23,7 +23,7 @@ joystick.button 1 4 press  # Front Pistons button.
 mwait 500
 joystick.button 1 4 release
 
-mwait 10000
+mwait 2000
 disable
 
 mwait 1000
