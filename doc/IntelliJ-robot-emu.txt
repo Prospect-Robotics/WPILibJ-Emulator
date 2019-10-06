@@ -1,0 +1,78 @@
+Create new git workspace directories by cloning (into seperate directories):
+   https://github.com/Prospect-Robotics/Software-Lessons.git
+   https://github.com/Prospect-Robotics/WPILibJ-Emulator.git
+
+Open IntelliJ, and close all existing projects.
+
+From the "Welcome to IntelliJ IDEA" window, choose "Import Project"
+
+Choose Software-Lessons/T-Shirt-Launcher (build.gradle will be in this directory).
+
+Select  "Create project from existing sources" button. Then "Next"
+
+Use the defaults for the Project name and press "Next".  If it says
+that the project folder isn't empty.  Would you like to overwrite it?
+choose "Yes"
+
+It should automatically detect the src/main/java directory, leave this
+checked and press "Next".
+
+In the "Libraries" pane, uncheck everything (gradle-wrapper, and any
+left over .class file directories). and press "Next".
+
+Select project SDK java as 11.0.4, Press "Next" and then "Finish"
+
+This should create the Software-Lessons "main" Project in a big
+Window.  If you try to build, there will be a ton of errors.  That is
+expected.
+
+Open the File->Project Structure menu.  The Project Structure window
+has several panes you can select.
+
+  * Project: Set "Project SDK" to 11.0.4 and "Project Language level"
+    to 11.  (should already be selected from preceding steps.)
+
+  * Modules: Here is the tricky part.  Click the little '+' sign in
+    the column that contains Software-Lessons to add another module.
+    Choose "Import module", and navigate to the WPILibj-Emulator
+    directory (again containing build.gradle), and press "OK"
+
+    This time choose "Create module from existing sources" and Next.
+    It should automatically find the java sources directory, leave
+    this checked and choose "Next".  For Libraries, uncheck both
+    gradle-wrapper and WPILibJ-Emulator.  For Modules, leave
+    WPILibJ-Emulator checked and press "Next", then "Finish" from the
+    final screen.
+
+    Now there should be two items in the module list, "main" and 
+    and WPILibJ-Emulator.  Select "main", and then in the
+    right-hand pane, select "Dependencies".  Click '+' in the right
+    side of the Dependencies pane, and add a Module dependency.
+    Choose WPILibJ-Emulator (probably the only option) and "OK"
+
+    Now "Apply" and then press "OK" to close the project Structure window.
+
+Now if you build, there should be no errors!  Do this now.
+
+Under the Run menu, choose "Run..." and choose "0: Edit Configurations..."
+
+Click the '+' to create a new configuration.
+
+Choose "Application"  Then fill in:
+
+    * Name: (something nice like Robot-Emulator
+    
+    * Main class: "frc.robot.Main"
+    
+    * Environment Variables: click the thing here to edit the
+      environment.  In the "Environment Variables" window, click the
+      '+' on the right side to add a variable.  Then fill in the name
+      as "ROBOT_EMU_CMD_FILE" and the value as the full path to the
+      .../WPILibJ-Emulator/example/software-lessons.cmd file
+
+    * Use classpath of module: "main"
+
+Now click "Apply" and then "Run" and it should run.
+
+If you want to run again, you can just press the green "Run" button,
+or select it from the Run menu.
