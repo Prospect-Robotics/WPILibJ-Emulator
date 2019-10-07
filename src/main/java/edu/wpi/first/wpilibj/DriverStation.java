@@ -7,9 +7,12 @@
 
 package edu.wpi.first.wpilibj;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.LineNumberReader;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
@@ -115,14 +118,28 @@ public class DriverStation {
 
   private static DriverStation instance;
   static {
-	  String cmd_file_name = System.getenv().getOrDefault("ROBOT_EMU_CMD_FILE", "driver_station.cmd");
-	  File cmd_file = new File(cmd_file_name);
-	  if (!cmd_file.canRead()) {
-		  System.err.println("Error: cannot read: " + cmd_file);
-		  System.exit(1);
+      String cmd_file_name = System.getenv().get("ROBOT_EMU_CMD_FILE");
+      InputStreamReader isr = null;
+      BufferedReader br = null;
+      try {
+	  if (cmd_file_name == null) {
+	      InputStream is = DriverStation.class.getResourceAsStream("/default.cmd");
+	      isr = new InputStreamReader(is, "UTF-8");
+	      br = new BufferedReader(isr);
+	  } else {
+	      br = new BufferedReader(new FileReader(cmd_file_name));
 	  }
-	  System.out.println("Robot Emulation starting.  Commands from: " + cmd_file);
-	  instance = new DriverStation(cmd_file);
+      } catch (Exception ex) {
+	  ex.printStackTrace();
+	  if (cmd_file_name != null) {
+	      System.err.println("Error: cannot read: " + cmd_file_name);
+	  }
+	  System.exit(1);
+      }
+      if (cmd_file_name != null) {
+	  System.out.println("Robot Emulation starting.  Commands from: " + cmd_file_name);
+      }
+      instance = new DriverStation(br);
   }
 
   // Joystick User Data
@@ -361,15 +378,9 @@ public class DriverStation {
    * variable.
    */
   @SuppressWarnings("PMD.AvoidInstantiatingObjectsInLoops")
-  private DriverStation(File cmdFile) {
+  private DriverStation(BufferedReader br) {
       commandSplitter = Pattern.compile("\\s+"); // Split command components on whitespace
-      try {
-	  cmdReader = new LineNumberReader(new FileReader(cmdFile));
-      } catch (IOException ioe) {
-	  System.err.println("Error: Couldn't open: " + cmdFile);
-	  ioe.printStackTrace();
-	  System.exit(1);
-      }
+      cmdReader = new LineNumberReader(br);
       //HAL.initialize(500, 0);
       m_waitForDataCount = 0;
       m_waitForDataMutex = new ReentrantLock();
